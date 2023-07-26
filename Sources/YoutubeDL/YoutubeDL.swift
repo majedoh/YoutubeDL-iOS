@@ -344,6 +344,7 @@ open class YoutubeDL: NSObject {
             dup2(errPipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO)
             
             let exitCode = self.handleFFmpeg(args: args)
+            LogManager.shared.log([ "exitCode", exitCode ])
             
             // restore standard out/error
             dup2(stdout, STDOUT_FILENO)
@@ -382,12 +383,12 @@ open class YoutubeDL: NSObject {
     
     func handleFFmpeg(args: [String]) -> Int {
         var args = args
-        
+        LogManager.shared.log([ "handleFFmpeg", args ])
         let pipe = Pipe()
         defer {
             do {
                 print(#function, "close")
-                LogManager.shared.log([ "close" ])
+                LogManager.shared.log([ "close handleFFmpeg" ])
                 try pipe.fileHandleForWriting.close()
             } catch {
                 print(#function, error)
@@ -396,7 +397,9 @@ open class YoutubeDL: NSObject {
         }
         
         if args.contains("-i") {
+            LogManager.shared.log([ "args.contains(-i)" ])
             if let timeRange {
+                LogManager.shared.log([ "timeRange", timeRange ])
                 args.insert(contentsOf: [
                     "-ss", "\(timeRange.lowerBound)",
                     "-t", "\(timeRange.upperBound - timeRange.lowerBound)",
@@ -404,6 +407,7 @@ open class YoutubeDL: NSObject {
             }
             
             if let progressBlock = willTranscode?() {
+                LogManager.shared.log([ "progressBlock", progressBlock ])
                 if #available(iOS 15.0, *) {
                     let maxTime: Double
                     if let duration {
@@ -442,6 +446,7 @@ open class YoutubeDL: NSObject {
                     }
                 } else {
                     // Fallback on earlier versions
+                    LogManager.shared.log([ "Fallback on earlier versions" ])
                 }
                 
                 args.insert(contentsOf: [
@@ -450,7 +455,7 @@ open class YoutubeDL: NSObject {
                 ], at: 1)
             }
         }
-        
+        LogManager.shared.log([ "Hello From HREe", args ])
         print(#function, args)
         LogManager.shared.log([ "args", args ])
         LogManager.shared.log([ "HERE", args ])
