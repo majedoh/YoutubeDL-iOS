@@ -459,6 +459,7 @@ open class YoutubeDL: NSObject {
         downloader.progress = Progress()
         
         var (formats, info) = try await extractInfo(url: url)
+        LogManager.shared.log(["download", formats, info])
         
         var directory: URL?
         var timeRange: Range<TimeInterval>?
@@ -466,10 +467,12 @@ open class YoutubeDL: NSObject {
         let title: String
         if let formatSelector = formatSelector {
             (formats, directory, timeRange, bitRate, title) = await formatSelector(info)
+            LogManager.shared.log(["formatSelector", formats, directory, timeRange, bitRate, title])
             guard !formats.isEmpty else { throw YoutubeDLError.canceled }
         } else {
             bitRate = formats[0].vbr
             title = info.safeTitle
+            LogManager.shared.log(["formatSelector", formats, bitRate, title])
         }
         
         pendingDownloads.append(Download(formats: [],
@@ -496,6 +499,7 @@ open class YoutubeDL: NSObject {
     func savePendingDownloads() {
         do {
             try JSONEncoder().encode(pendingDownloads).write(to: pendingDownloadsURL)
+            LogManager.shared.log([ "savePendingDownloads", pendingDownloads ])
         } catch {
             print(#function, error)
             LogManager.shared.log([ error.localizedDescription ])
@@ -515,6 +519,7 @@ open class YoutubeDL: NSObject {
     
     func processPendingDownload() {
         guard let index = pendingDownloads.firstIndex(where: { !$0.formats.isEmpty }) else {
+            LogManager.shared.log([ "no pending download" ])
             return
         }
 
@@ -538,12 +543,14 @@ open class YoutubeDL: NSObject {
         let kind: Kind = format.isVideoOnly
         ? (!format.isTranscodingNeeded ? .videoOnly : .otherVideo)
         : (format.isAudioOnly ? .audioOnly : .complete)
+        LogManager.shared.log([ "download", format, resume, chunked, directory, title ])
         
         func download(for request: URLRequest, resume: Bool) throws {
             let progress: Progress? = downloader.progress
             progress?.kind = .file
             progress?.fileOperationKind = .downloading
             let url = makeURL(directory: directory, title: title, kind: kind, ext: format.ext)
+            LogManager.shared.log(["download", "url", url.absoluteString ])
             do {
                 try Data().write(to: url)
             }
@@ -556,6 +563,7 @@ open class YoutubeDL: NSObject {
             removeItem(at: url)
 
             let task = downloader.download(request: request, url: url, resume: resume)
+            LogManager.shared.log
             
             if task.hasPrefix(0) {
                 guard FileManager.default.createFile(atPath: url.appendingPathExtension("part").path, contents: nil) else { fatalError() }
@@ -571,6 +579,7 @@ open class YoutubeDL: NSObject {
             while start < size {
                 // https://github.com/ytdl-org/youtube-dl/issues/15271#issuecomment-362834889
                 let end = request.setRange(start: start, fullSize: Int64(size))
+                LogManager.shared.log([ "chunked", start, end ])
 //                print(#function, "first chunked size:", end + 1)
                 
                 try download(for: request, resume: resume && start == 0)
@@ -578,8 +587,11 @@ open class YoutubeDL: NSObject {
             }
         } else {
             guard let request = format.urlRequest else { fatalError() }
+            LogManager.shared.log([ "not chunked" ])
+            
             
             try download(for: request, resume: resume)
+            LogManager.shared.log([ "downloaded" ])
         }
     }
    
