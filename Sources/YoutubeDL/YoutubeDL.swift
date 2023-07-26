@@ -563,7 +563,6 @@ open class YoutubeDL: NSObject {
             removeItem(at: url)
 
             let task = downloader.download(request: request, url: url, resume: resume)
-            LogManager.shared.log
             
             if task.hasPrefix(0) {
                 guard FileManager.default.createFile(atPath: url.appendingPathExtension("part").path, contents: nil) else { fatalError() }
