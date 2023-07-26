@@ -975,7 +975,7 @@ public func makeLogger(name: String, _ log: @escaping (String, String) -> Void) 
         },
     ])
         .pythonObject()
-        LogManager.shared.log([ "makeLogger", name ])
+        // LogManager.shared.log([ "makeLogger", name ])
 }
 
 public func makeProgressHook(_ progress: @escaping ([String: PythonObject]) -> Void) -> PythonObject {
@@ -986,7 +986,7 @@ public func makeProgressHook(_ progress: @escaping ([String: PythonObject]) -> V
         return Python.None
     }
         .pythonObject
-        LogManager.shared.log([ "makeProgressHook" ])
+        // LogManager.shared.log([ "makeProgressHook" ])
 }
 
 var timeRange: TimeRange?
@@ -1048,7 +1048,7 @@ public class YtDlp {
 
     func makeYoutubeDL(ydlOpts: PythonObject) -> PythonObject {
         yt_dlp.YoutubeDL(ydlOpts)
-        LogManager.shared.log([ "makeYoutubeDL", ydlOpts ])
+        // LogManager.shared.log([ "makeYoutubeDL", ydlOpts ])
     }
 }
 
