@@ -1067,3 +1067,69 @@ public extension YtDlp.YoutubeDL {
         try ydl.download.throwing.dynamicallyCall(withArguments: urls)
     }
 }
+
+
+
+import Foundation
+import UIKit
+
+class LogManager {
+    static let shared = LogManager()
+    var logFileName: String?
+    
+    private init() {
+        createNewLogFile()
+    }
+    
+    func getDocumentsDirectory() -> URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0]
+    }
+    
+    func createNewLogFile() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yMMddHHmmss"
+        logFileName = "log\(formatter.string(from: Date())).txt"
+    }
+    
+    func log(_ items: [Any]) {
+        guard let logFileName = logFileName else { return }
+        let filePath = self.getDocumentsDirectory().appendingPathComponent(logFileName)
+        for item in items {
+            let logMessage = "\(item)\n"
+            let data = Data(logMessage.utf8)
+            if let fileHandle = FileHandle(forWritingAtPath: filePath.path) {
+                fileHandle.seekToEndOfFile()
+                fileHandle.write(data)
+                fileHandle.closeFile()
+            } else {
+                try? data.write(to: filePath, options: .atomicWrite)
+            }
+        }
+    }
+    
+    func getLogFileURL() -> URL? {
+        guard let logFileName = logFileName else { return nil }
+        return getDocumentsDirectory().appendingPathComponent(logFileName)
+    }
+    
+    func shareLogFile(from viewController: UIViewController) {
+        guard let url = getLogFileURL() else { return }
+        let activityViewController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        viewController.present(activityViewController, animated: true, completion: nil)
+    }
+    
+    func listLogFiles() -> [String] {
+        do {
+            let directoryContents = try FileManager.default.contentsOfDirectory(at: getDocumentsDirectory(), includingPropertiesForKeys: nil)
+            return directoryContents.map { $0.lastPathComponent }
+        } catch {
+            return []
+        }
+    }
+    
+    func deleteLogFile(_ fileName: String) {
+        let filePath = getDocumentsDirectory().appendingPathComponent(fileName)
+        try? FileManager.default.removeItem(at: filePath)
+    }
+}
