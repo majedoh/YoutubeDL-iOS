@@ -286,7 +286,7 @@ open class YoutubeDL: NSObject {
         let sys = try Python.attemptImport("sys")
         if !(Array(sys.path) ?? []).contains(Self.pythonModuleURL.path) {
             injectFakePopen(handler: popenHandler)
-            
+            LogManager.shared.log([ "injectFakePopen" ])
             sys.path.insert(1, Self.pythonModuleURL.path)
         }
         
@@ -332,6 +332,7 @@ open class YoutubeDL: NSObject {
         let popen = args[0]
         var result = Array<String?>(repeating: nil, count: 2)
         if var args: [String] = Array(args[1][0]) {
+            LogManager.shared.log(["inside popenHandler", args])
             // save standard out/error
             let stdout = dup(STDOUT_FILENO)
             let stderr = dup(STDERR_FILENO)
@@ -363,8 +364,19 @@ open class YoutubeDL: NSObject {
             
             result[0] = read(pipe: outPipe)
             result[1] = read(pipe: errPipe)
+            LogManager.shared.log([ "result", result ])
+            LogManager.shared.log([ "result[0]", result[0] ])
+            LogManager.shared.log([ "result[1]", result[1] ])
+            LogManager.shared.log([ "Python.tuple(result)", Python.tuple(result)])
+
+
             return Python.tuple(result)
         }
+        LogManager.shared.log([ "result", result ])
+        LogManager.shared.log([ "OUtside" ])
+        LogManager.shared.log([ "result[0]", result[0] ])
+        LogManager.shared.log([ "result[1]", result[1] ])
+        LogManager.shared.log([ "Python.tuple(result)", Python.tuple(result)])
         return Python.tuple(result)
     }
     
