@@ -226,6 +226,7 @@ open class YoutubeDL: NSObject {
     lazy var postDownloadTask = Task {
         for await (url, kind) in downloader.stream {
             print(#function, kind, url.lastPathComponent)
+             LogManager.shared.log([ "url", url.absoluteString, "kind", kind.rawValue ])
             
             switch kind {
             case .complete:
@@ -234,6 +235,7 @@ open class YoutubeDL: NSObject {
                 let directory = url.deletingLastPathComponent()
                 guard let download = pendingDownloads.first(where: { $0.directory.path == directory.path }) else {
                     print(#function, "no download with", directory, pendingDownloads.map(\.directory))
+                    LogManager.shared.log([ "no download with", directory.absoluteString ])
                     return
                 }
                 guard tryMerge(directory: directory, title: url.title, timeRange: download.timeRange) else { return }
@@ -244,6 +246,7 @@ open class YoutubeDL: NSObject {
                     finishedContinuation?.yield(url)
                 } catch {
                     print(error)
+                    LogManager.shared.log([ error.localizedDescription ])
                 }
             }
         }
@@ -275,6 +278,7 @@ open class YoutubeDL: NSObject {
         if !FileManager.default.fileExists(atPath: Self.pythonModuleURL.path) {
             guard downloadPythonModule else {
                 throw YoutubeDLError.noPythonModule
+                LogManager.shared.log([ "noPythonModule" ])
             }
             try await Self.downloadPythonModule()
         }
@@ -324,6 +328,7 @@ open class YoutubeDL: NSObject {
     
     lazy var popenHandler = PythonFunction { args in
         print(#function, args)
+        LogManager.shared.log([ "popenHandler", args ])
         let popen = args[0]
         var result = Array<String?>(repeating: nil, count: 2)
         if var args: [String] = Array(args[1][0]) {
@@ -348,9 +353,11 @@ open class YoutubeDL: NSObject {
             func read(pipe: Pipe) -> String? {
                 guard let string = String(data: pipe.fileHandleForReading.availableData, encoding: .utf8) else {
                     print(#function, "not UTF-8?")
+                    LogManager.shared.log([ "not UTF-8?" ])
                     return nil
                 }
                 print(#function, string)
+                LogManager.shared.log([ string ])
                 return string
             }
             
@@ -368,9 +375,11 @@ open class YoutubeDL: NSObject {
         defer {
             do {
                 print(#function, "close")
+                LogManager.shared.log([ "close" ])
                 try pipe.fileHandleForWriting.close()
             } catch {
                 print(#function, error)
+                LogManager.shared.log([ error.localizedDescription ])
             }
         }
         
@@ -417,6 +426,7 @@ open class YoutubeDL: NSObject {
                             }
                         }
                         //                            print(#function, string)
+                        LogManager.shared.log([ string ])
                     }
                 } else {
                     // Fallback on earlier versions
@@ -430,6 +440,7 @@ open class YoutubeDL: NSObject {
         }
         
         print(#function, args)
+        LogManager.shared.log([ "args", args ])
         return args[0] == "ffmpeg" ? ffmpeg(args) : ffprobe(args)
     }
     
@@ -487,6 +498,7 @@ open class YoutubeDL: NSObject {
             try JSONEncoder().encode(pendingDownloads).write(to: pendingDownloadsURL)
         } catch {
             print(#function, error)
+            LogManager.shared.log([ error.localizedDescription ])
         }
     }
     
@@ -496,6 +508,7 @@ open class YoutubeDL: NSObject {
                                             from: try Data(contentsOf: pendingDownloadsURL))
         } catch {
             print(#function, error)
+            LogManager.shared.log([ error.localizedDescription ])
             return []
         }
     }
@@ -536,6 +549,7 @@ open class YoutubeDL: NSObject {
             }
             catch {
                 print(#function, error)
+                LogManager.shared.log([ error.localizedDescription ])
             }
             progress?.fileURL = url
             
@@ -548,6 +562,7 @@ open class YoutubeDL: NSObject {
             }
             
             print(#function, "start download:", task.info)
+            LogManager.shared.log([ "start download:", task.info ])
         }
         
         if chunked, let size = format.filesize {
@@ -577,8 +592,10 @@ open class YoutubeDL: NSObject {
         }
 
         print(#function, url)
+        LogManager.shared.log([ "url", url.absoluteString ])
         let info = try pythonObject.extract_info.throwing.dynamicallyCall(withKeywordArguments: ["": url.absoluteString, "download": false, "process": true])
         print(info)
+        LogManager.shared.log([ "extractInfo", info ])
 //        print(#function, "throttled:", pythonObject.throttled)
         
         let format_selector = pythonObject.build_format_selector(options!["format"])
@@ -606,6 +623,7 @@ open class YoutubeDL: NSObject {
             print(#function,
                   videoAsset.tracks(withMediaType: .video),
                   audioAsset.tracks(withMediaType: .audio))
+                  LogManager.shared.log([ "no video/audio track" ])
             return false
         }
         
@@ -624,14 +642,17 @@ open class YoutubeDL: NSObject {
             }
             try audioCompositionTrack?.insertTimeRange(range, of: audioAssetTrack, at: .zero)
             print(#function, videoAssetTrack.timeRange, range)
+            LogManager.shared.log([ "videoAssetTrack.timeRange", videoAssetTrack.timeRange, "range", range ])
         }
         catch {
             print(#function, error)
+            LogManager.shared.log([ error.localizedDescription ])
             return false
         }
         
         guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
             print(#function, "unable to init export session")
+            LogManager.shared.log([ "unable to init export session" ])
             return false
         }
         let outputURL = directory.appendingPathComponent(title).appendingPathExtension("mp4")
@@ -641,6 +662,7 @@ open class YoutubeDL: NSObject {
         session.outputURL = outputURL
         session.outputFileType = .mp4
         print(#function, "merging...")
+        LogManager.shared.log([ "merging..." ])
         
         DispatchQueue.main.async {
             let progress = self.downloader.progress
@@ -654,7 +676,9 @@ open class YoutubeDL: NSObject {
         
         session.exportAsynchronously {
             print(#function, "finished merge", session.status.rawValue)
+            LogManager.shared.log([ "finished merge", session.status.rawValue ])
             print(#function, "took", self.downloader.dateComponentsFormatter.string(from: ProcessInfo.processInfo.systemUptime - t0) ?? "?")
+            LogManager.shared.log([ "took", self.downloader.dateComponentsFormatter.string(from: ProcessInfo.processInfo.systemUptime - t0) ?? "?" ])
             if session.status == .completed {
                 if !self.keepIntermediates {
                     removeItem(at: videoURL)
@@ -664,6 +688,7 @@ open class YoutubeDL: NSObject {
                 self.export(outputURL)
             } else {
                 print(#function, session.error ?? "no error?")
+                LogManager.shared.log([ session.error ?? "no error?" ])
             }
         }
         return true
@@ -672,6 +697,7 @@ open class YoutubeDL: NSObject {
     open func transcode(directory: URL) async throws {
         guard let download = pendingDownloads.first(where: { $0.directory.path == directory.path }) else {
             print(#function, "no download with", directory, pendingDownloads.map(\.directory))
+            LogManager.shared.log([ "no download with", directory.absoluteString, "transcode" ])
             return
         }
         
@@ -709,6 +735,7 @@ open class YoutubeDL: NSObject {
         
         transcoder?.progressBlock = { progress in
             print(#function, "progress:", progress)
+            LogManager.shared.log([ "progress:", progress ])
             let elapsed = ProcessInfo.processInfo.systemUptime - t0
             let speed = progress / elapsed
             let ETA = (1 - progress) / speed
@@ -729,7 +756,7 @@ open class YoutubeDL: NSObject {
         try transcoder?.transcode(from: url, to: outURL, timeRange: download.timeRange, bitRate: download.bitRate)
         
         print(#function, "took", downloader.dateComponentsFormatter.string(from: ProcessInfo.processInfo.systemUptime - t0) ?? "?")
-        
+        LogManager.shared.log([ "took", downloader.dateComponentsFormatter.string(from: ProcessInfo.processInfo.systemUptime - t0) ?? "?" ])
         if !keepIntermediates {
             removeItem(at: url)
         }
@@ -758,6 +785,7 @@ open class YoutubeDL: NSObject {
             //                            changeRequest.contentEditingOutput = output
         }) { (success, error) in
             print(#function, success, error ?? "")
+            LogManager.shared.log([ success, error ?? "" ])
             
             if let continuation = self.finishedContinuation {
                 continuation.yield(url)
@@ -792,11 +820,13 @@ open class YoutubeDL: NSObject {
             }
             do {
                 try movePythonModule(location)
+                LogManager.shared.log([ "downloadPythonModule", "success" ])
 
                 completionHandler(nil)
             }
             catch {
                 print(#function, error)
+                LogManager.shared.log([ error.localizedDescription ])
                 completionHandler(error)
             }
         }
@@ -814,8 +844,10 @@ open class YoutubeDL: NSObject {
                 downloadPythonModule(from: url) { error in
                     if let error = error {
                         continuation.resume(throwing: error)
+                        LogManager.shared.log([ "downloadPythonModule", error.localizedDescription ])
                     } else {
                         continuation.resume()
+                        LogManager.shared.log([ "downloadPythonModule", "success" ])
                     }
                 }
             }
@@ -859,35 +891,44 @@ public func yt_dlp(argv: [String], progress: (([String: PythonObject]) -> Void)?
     let yt_dlp = try await YtDlp(context: context)
     
     let (ydl_opts, all_urls) = try yt_dlp.parseOptions(args: argv)
+    LogManager.shared.log([ "ydl_opts", ydl_opts, "all_urls", all_urls ])
     
     // https://github.com/yt-dlp/yt-dlp#adding-logger-and-progress-hook
     
     if let log {
         ydl_opts["logger"] = makeLogger(name: "MyLogger", log)
+        LogManager.shared.log([ "MyLogger" ])
     }
     
     if let progress {
         ydl_opts["progress_hooks"] = [makeProgressHook(progress)]
+        LogManager.shared.log([ "progress_hooks" ])
     }
     
     let myPP = yt_dlp.makePostProcessor(name: "MyPP") { pythonSelf, info in
             do {
                 let formats = try info.checking["requested_formats"]
                     .map { try PythonDecoder().decode([Format].self, from: $0) }
+                    LogManager.shared.log([ "requested_formats", formats ])
                 guard let vbr = formats?.first(where: { $0.vbr != nil })?.vbr.map(Int.init) else {
+                    LogManager.shared.log([ "no vbr" ])
                     return ([], info)
                 }
                 pythonSelf._downloader.params["postprocessor_args"]
                     .checking["merger+ffmpeg"]?
                     .extend(["-b:v", "\(vbr)k"])
+                    LogManager.shared.log([ "vbr", vbr ])
                 
                 duration = TimeInterval(info["duration"])
 //                print(#function, "vbr:", vbr, "duration:", duration ?? "nil", args[0]._downloader.params)
+LogManager.shared.log([ "vbr", vbr, "duration", duration ?? "nil" ])
             } catch {
                 print(#function, error)
+                LogManager.shared.log([ error.localizedDescription ])
             }
 //            print(#function, "MyPP.run:", info["requested_formats"])//, args)
             return ([], info)
+            LogManager.shared.log([ "MyPP.run", info["requested_formats"] ])
         }
     
 //    print(#function, ydl_opts)
@@ -910,14 +951,17 @@ public func makeLogger(name: String, _ log: @escaping (String, String) -> Void) 
         "debug": PythonInstanceMethod { params in
             let isDebug = String(params[1])!.hasPrefix("[debug] ")
             log(isDebug ? "debug" : "info", String(params[1]) ?? "")
+            LogManager.shared.log([ isDebug ? "debug" : "info", String(params[1]) ?? "" ])
             return Python.None
         },
         "info": PythonInstanceMethod { params in
             log("info", String(params[1]) ?? "")
+            LogManager.shared.log([ "info", String(params[1]) ?? "" ])
             return Python.None
         },
         "warning": PythonInstanceMethod { params in
             log("warning", String(params[1]) ?? "")
+            LogManager.shared.log([ "warning", String(params[1]) ?? "" ])
             return Python.None
         },
         "error": PythonInstanceMethod { params in
@@ -925,20 +969,24 @@ public func makeLogger(name: String, _ log: @escaping (String, String) -> Void) 
             
             let traceback = Python.import("traceback")
             traceback.print_exc()
+            LogManager.shared.log([ "error", String(params[1]) ?? "" ])
             
             return Python.None
         },
     ])
         .pythonObject()
+        LogManager.shared.log([ "makeLogger", name ])
 }
 
 public func makeProgressHook(_ progress: @escaping ([String: PythonObject]) -> Void) -> PythonObject {
     PythonFunction { (d: PythonObject) in
         let dict: [String: PythonObject] = Dictionary(d) ?? [:]
         progress(dict)
+        LogManager.shared.log([ "makeProgressHook", dict ])
         return Python.None
     }
         .pythonObject
+        LogManager.shared.log([ "makeProgressHook" ])
 }
 
 var timeRange: TimeRange?
@@ -969,12 +1017,14 @@ public class YtDlp {
     
     init(context: Context) async throws {
         yt_dlp = try await context.loadPythonModule()
+        LogManager.shared.log([ "yt_dlp", yt_dlp ])
         self.context = context
     }
     
     public func parseOptions(args: [String]) throws -> (ydlOpts: PythonObject, allURLs: PythonObject) {
         let (parser, _, all_urls, ydl_opts) = try yt_dlp.parse_options.throwing.dynamicallyCall(withKeywordArguments: ["argv": args])
             .tuple4
+            LogManager.shared.log([ "parser", parser, "all_urls", all_urls, "ydl_opts", ydl_opts ])
         
         parser.destroy()
         
@@ -985,8 +1035,11 @@ public class YtDlp {
         PythonClass(name, superclasses: [yt_dlp.postprocessor.PostProcessor], members: [
             "run": PythonFunction { args in
                 let `self` = args[0]
+                LogManager.shared.log([ "run", args[0], args[1] ])
                 let info = args[1]
+                LogManager.shared.log([ "run", info ])
                 let (filesToDelete, infoDict) = run(self, info)
+                LogManager.shared.log([ "run", filesToDelete, infoDict ])
                 return Python.tuple([filesToDelete.pythonObject, infoDict])
             }
         ])
@@ -995,6 +1048,7 @@ public class YtDlp {
 
     func makeYoutubeDL(ydlOpts: PythonObject) -> PythonObject {
         yt_dlp.YoutubeDL(ydlOpts)
+        LogManager.shared.log([ "makeYoutubeDL", ydlOpts ])
     }
 }
 
@@ -1002,11 +1056,14 @@ public extension YtDlp.YoutubeDL {
     convenience init(args: [String]) async throws {
         let yt_dlp = try await YtDlp()
         let (ydlOpts, allUrls) = try yt_dlp.parseOptions(args: args)
+        LogManager.shared.log([ "ydlOpts", ydlOpts, "allUrls", allUrls ])
         self.init(ydl: yt_dlp.makeYoutubeDL(ydlOpts: ydlOpts), urls: allUrls)
+
     }
     
     func download(urls: [URL]? = nil) throws {
         let urls = urls?.map(\.absoluteString).pythonObject ?? self.urls
+        LogManager.shared.log([ "download", urls ])
         try ydl.download.throwing.dynamicallyCall(withArguments: urls)
     }
 }
