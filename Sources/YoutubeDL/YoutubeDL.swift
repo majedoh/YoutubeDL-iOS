@@ -441,6 +441,10 @@ open class YoutubeDL: NSObject {
         
         print(#function, args)
         LogManager.shared.log([ "args", args ])
+        LogManager.shared.log([ "HERE", args ])
+        LogManager.shared.log([ "args[0]: ", args[0] ])
+        LogManager.shared.log([ "ffmpeg(args) ", ffmpeg(args) ])
+         LogManager.shared.log([ "ffprobe(args) ", ffprobe(args) ])
         return args[0] == "ffmpeg" ? ffmpeg(args) : ffprobe(args)
     }
     
