@@ -397,6 +397,7 @@ open class YoutubeDL: NSObject {
         }
         
         if args.contains("-i") {
+            LogManager.shared.log([ "args", args ])
             LogManager.shared.log([ "args.contains(-i)" ])
             if let timeRange {
                 LogManager.shared.log([ "timeRange", timeRange ])
@@ -465,8 +466,8 @@ open class YoutubeDL: NSObject {
         return args[0] == "ffmpeg" ? ffmpeg(args) : ffprobe(args)
     }
     
+
     var willTranscode: (() -> ((Double) -> Void)?)?
-    
     func makePythonObject(_ options: PythonObject? = nil, initializePython: Bool = true) async throws -> PythonObject {
         let pythonModule = try await loadPythonModule()
         pythonObject = pythonModule.YoutubeDL(options ?? defaultOptions)
@@ -512,6 +513,7 @@ open class YoutubeDL: NSObject {
         
         for await url in finished {
             // FIXME: validate url
+            LogManager.shared.log([ "url", url ])
             return url
         }
         fatalError()
@@ -547,6 +549,7 @@ open class YoutubeDL: NSObject {
         let format = pendingDownloads[index].formats.remove(at: 0)
         
         Task {
+            LogManager.shared.log([ "Pending Downloads" ])
             let download = pendingDownloads[index]
             try self.download(format: format, resume: true, chunked: download.options.contains(.chunked), directory: download.directory, title: download.safeTitle)
         }
@@ -638,18 +641,15 @@ open class YoutubeDL: NSObject {
             let format = try decoder.decode(Format.self, from: format)
             formats.append(format)
         }
-        
         return (formats, try decoder.decode(Info.self, from: info))
     }
     
     func tryMerge(directory: URL, title: String, timeRange: TimeRange?) -> Bool {
         let t0 = ProcessInfo.processInfo.systemUptime
-       
         let videoURL = makeURL(directory: directory, title: title, kind: .videoOnly, ext: "mp4")
         let audioURL: URL = makeURL(directory: directory, title: title, kind: .audioOnly, ext: "m4a")
         let videoAsset = AVAsset(url: videoURL)
         let audioAsset = AVAsset(url: audioURL)
-        
         guard let videoAssetTrack = videoAsset.tracks(withMediaType: .video).first,
               let audioAssetTrack = audioAsset.tracks(withMediaType: .audio).first else {
             print(#function,
@@ -687,15 +687,15 @@ open class YoutubeDL: NSObject {
             LogManager.shared.log([ "unable to init export session" ])
             return false
         }
+        
         let outputURL = directory.appendingPathComponent(title).appendingPathExtension("mp4")
         
         removeItem(at: outputURL)
-        
         session.outputURL = outputURL
         session.outputFileType = .mp4
         print(#function, "merging...")
         LogManager.shared.log([ "merging..." ])
-        
+
         DispatchQueue.main.async {
             let progress = self.downloader.progress
             progress.kind = nil
@@ -716,7 +716,6 @@ open class YoutubeDL: NSObject {
                     removeItem(at: videoURL)
                     removeItem(at: audioURL)
                 }
-                
                 self.export(outputURL)
             } else {
                 print(#function, session.error ?? "no error?")
@@ -781,20 +780,14 @@ open class YoutubeDL: NSObject {
             }
         }
         
-        defer {
-            transcoder = nil
-        }
+        defer {transcoder = nil}
         
         try transcoder?.transcode(from: url, to: outURL, timeRange: download.timeRange, bitRate: download.bitRate)
         
         print(#function, "took", downloader.dateComponentsFormatter.string(from: ProcessInfo.processInfo.systemUptime - t0) ?? "?")
         LogManager.shared.log([ "took", downloader.dateComponentsFormatter.string(from: ProcessInfo.processInfo.systemUptime - t0) ?? "?" ])
-        if !keepIntermediates {
-            removeItem(at: url)
-        }
-        
+        if !keepIntermediates {removeItem(at: url)}
         notify(body: NSLocalizedString("FinishedTranscoding", comment: "Notification body"))
-        
         tryMerge(directory: url.deletingLastPathComponent(), title: url.title, timeRange: download.timeRange)
     }
     
@@ -814,7 +807,6 @@ open class YoutubeDL: NSObject {
         
         PHPhotoLibrary.shared().performChanges({
             _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-            //                            changeRequest.contentEditingOutput = output
         }) { (success, error) in
             print(#function, success, error ?? "")
             LogManager.shared.log([ success, error ?? "" ])
@@ -900,9 +892,7 @@ public extension Format {
 }
 
 extension URL {
-    var part: URL {
-        appendingPathExtension("part")
-    }
+    var part: URL {appendingPathExtension("part")}
     
     var title: String {
         let name = deletingPathExtension().lastPathComponent
@@ -939,6 +929,7 @@ public func yt_dlp(argv: [String], progress: (([String: PythonObject]) -> Void)?
     
     let myPP = yt_dlp.makePostProcessor(name: "MyPP") { pythonSelf, info in
             do {
+                LogManager.shared.log([ "requested_formats" ])
                 let formats = try info.checking["requested_formats"]
                     .map { try PythonDecoder().decode([Format].self, from: $0) }
                     LogManager.shared.log([ "requested_formats", formats ])
@@ -946,6 +937,7 @@ public func yt_dlp(argv: [String], progress: (([String: PythonObject]) -> Void)?
                     LogManager.shared.log([ "no vbr" ])
                     return ([], info)
                 }
+                LogManager.shared.log([ "postprocessor_args" ])
                 pythonSelf._downloader.params["postprocessor_args"]
                     .checking["merger+ffmpeg"]?
                     .extend(["-b:v", "\(vbr)k"])
@@ -953,14 +945,14 @@ public func yt_dlp(argv: [String], progress: (([String: PythonObject]) -> Void)?
                 
                 duration = TimeInterval(info["duration"])
 //                print(#function, "vbr:", vbr, "duration:", duration ?? "nil", args[0]._downloader.params)
-LogManager.shared.log([ "vbr", vbr, "duration", duration ?? "nil" ])
+                LogManager.shared.log([ "vbr", vbr, "duration", duration ?? "nil" ])
             } catch {
                 print(#function, error)
                 LogManager.shared.log([ error.localizedDescription ])
             }
 //            print(#function, "MyPP.run:", info["requested_formats"])//, args)
+            LogManager.shared.log([ "MyPP.run", info ])
             return ([], info)
-            LogManager.shared.log([ "MyPP.run", info["requested_formats"] ])
         }
     
 //    print(#function, ydl_opts)
